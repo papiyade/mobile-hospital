@@ -75,6 +75,7 @@ static Future<Map<String, dynamic>> register({
     String token,
     int serviceId,
     String date,
+    String time,
   ) async {
     final response = await http.post(
       Uri.parse("$baseUrl/appointments"),
@@ -82,6 +83,7 @@ static Future<Map<String, dynamic>> register({
       body: jsonEncode({
         "service_id": serviceId,
         "date": date,
+        "time": time,
       }),
     );
 

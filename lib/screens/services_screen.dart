@@ -14,6 +14,7 @@ class ServicesScreen extends StatefulWidget {
 class _ServicesScreenState extends State<ServicesScreen> {
   List<Map<String, dynamic>> services = [];
   bool loading = true;
+  bool isBooking = false;
 
   @override
   void initState() {
@@ -23,16 +24,23 @@ class _ServicesScreenState extends State<ServicesScreen> {
 
   Future<void> _load() async {
     final auth = Provider.of<AuthProvider>(context, listen: false);
-    if (auth.token == null) { setState(() => loading = false); return; }
+    if (auth.token == null) {
+      setState(() => loading = false);
+      return;
+    }
     try {
       final data = await ApiService.getServices(auth.token!);
       if (!mounted) return;
       setState(() {
-        services = List<Map<String, dynamic>>.from(data.map((s) => {
-          "id": s["id"],
-          "name": s["name"] ?? "Service",
-          "capacity": s["capacity"] ?? "-",
-        }));
+        services = List<Map<String, dynamic>>.from(
+          data.map(
+            (s) => {
+              "id": s["id"],
+              "name": s["name"] ?? "Service",
+              "capacity": s["capacity"] ?? "-",
+            },
+          ),
+        );
         loading = false;
       });
     } catch (_) {
@@ -44,6 +52,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
   Future<void> _openBooking(int serviceId) async {
     final auth = Provider.of<AuthProvider>(context, listen: false);
     DateTime? date;
+    String? selectedTime;
 
     final result = await showModalBottomSheet(
       context: context,
@@ -55,7 +64,11 @@ class _ServicesScreenState extends State<ServicesScreen> {
       builder: (ctx) => StatefulBuilder(
         builder: (_, setModal) => Padding(
           padding: EdgeInsets.fromLTRB(
-              24, 16, 24, MediaQuery.of(ctx).viewInsets.bottom + 32),
+            24,
+            16,
+            24,
+            MediaQuery.of(ctx).viewInsets.bottom + 32,
+          ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -63,7 +76,8 @@ class _ServicesScreenState extends State<ServicesScreen> {
               // Handle
               Center(
                 child: Container(
-                  width: 36, height: 4,
+                  width: 36,
+                  height: 4,
                   margin: const EdgeInsets.only(bottom: 20),
                   decoration: BoxDecoration(
                     color: MediQueueTheme.divider,
@@ -72,100 +86,196 @@ class _ServicesScreenState extends State<ServicesScreen> {
                 ),
               ),
 
-              Row(children: [
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: MediQueueTheme.primarySurface,
-                    borderRadius: BorderRadius.circular(10),
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: MediQueueTheme.primarySurface,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Icon(
+                      Icons.calendar_month_rounded,
+                      color: MediQueueTheme.primary,
+                      size: 20,
+                    ),
                   ),
-                  child: Icon(Icons.calendar_month_rounded,
-                      color: MediQueueTheme.primary, size: 20),
-                ),
-                const SizedBox(width: 12),
-                Text('Prendre rendez-vous',
+                  const SizedBox(width: 12),
+                  Text(
+                    'Prendre rendez-vous',
                     style: GoogleFonts.dmSans(
-                        fontSize: 17, fontWeight: FontWeight.w700,
-                        color: MediQueueTheme.textPrimary)),
-              ]),
+                      fontSize: 17,
+                      fontWeight: FontWeight.w700,
+                      color: MediQueueTheme.textPrimary,
+                    ),
+                  ),
+                ],
+              ),
 
               const SizedBox(height: 24),
 
               // Boutons date
-              Row(children: [
-                Expanded(child: _dateBtn('Aujourd\'hui', Icons.today_rounded,
-                    () => setModal(() => date = DateTime.now()))),
-                const SizedBox(width: 12),
-                Expanded(child: _dateBtn('Choisir', Icons.edit_calendar_rounded,
-                    () async {
-                  final picked = await showDatePicker(
-                    context: ctx,
-                    initialDate: DateTime.now(),
-                    firstDate: DateTime.now(),
-                    lastDate: DateTime(2100),
-                    builder: (c, child) => Theme(
-                      data: Theme.of(c).copyWith(
-                        colorScheme: ColorScheme.light(
-                          primary: MediQueueTheme.primary),
-                      ),
-                      child: child!,
+              Row(
+                children: [
+                  Expanded(
+                    child: _dateBtn(
+                      'Aujourd\'hui',
+                      Icons.today_rounded,
+                      () => setModal(() => date = DateTime.now()),
                     ),
-                  );
-                  if (picked != null) setModal(() => date = picked);
-                })),
-              ]),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _dateBtn(
+                      'Choisir',
+                      Icons.edit_calendar_rounded,
+                      () async {
+                        final picked = await showDatePicker(
+                          context: ctx,
+                          initialDate: DateTime.now(),
+                          firstDate: DateTime.now(),
+                          lastDate: DateTime(2100),
+                          builder: (c, child) => Theme(
+                            data: Theme.of(c).copyWith(
+                              colorScheme: ColorScheme.light(
+                                primary: MediQueueTheme.primary,
+                              ),
+                            ),
+                            child: child!,
+                          ),
+                        );
+                        if (picked != null) setModal(() => date = picked);
+                      },
+                    ),
+                  ),
+                ],
+              ),
 
               // Date sélectionnée
               if (date != null) ...[
                 const SizedBox(height: 16),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 12,
+                  ),
                   decoration: BoxDecoration(
                     color: MediQueueTheme.primarySurface,
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: MediQueueTheme.primary.withOpacity(0.3)),
-                  ),
-                  child: Row(children: [
-                    Icon(Icons.event_available_rounded,
-                        color: MediQueueTheme.primary, size: 18),
-                    const SizedBox(width: 10),
-                    Text(
-                      '${date!.day}/${date!.month}/${date!.year}',
-                      style: GoogleFonts.dmSans(
-                          color: MediQueueTheme.primary,
-                          fontWeight: FontWeight.w600),
+                    border: Border.all(
+                      color: MediQueueTheme.primary.withOpacity(0.3),
                     ),
-                  ]),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.event_available_rounded,
+                        color: MediQueueTheme.primary,
+                        size: 18,
+                      ),
+                      const SizedBox(width: 10),
+                      Text(
+                        '${date!.day}/${date!.month}/${date!.year}',
+                        style: GoogleFonts.dmSans(
+                          color: MediQueueTheme.primary,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ],
 
-              const SizedBox(height: 24),
+              const SizedBox(height: 16),
+
+              InkWell(
+                onTap: () async {
+                  final picked = await showTimePicker(
+                    context: ctx,
+                    initialTime: TimeOfDay.now(),
+                  );
+
+                  if (picked != null) {
+                    setModal(() {
+                      selectedTime =
+                          "${picked.hour.toString().padLeft(2, '0')}:${picked.minute.toString().padLeft(2, '0')}";
+                    });
+                  }
+                },
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 14,
+                  ),
+                  decoration: BoxDecoration(
+                    border: Border.all(color: MediQueueTheme.divider),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.access_time, color: MediQueueTheme.primary),
+                      const SizedBox(width: 10),
+                      Text(
+                        selectedTime ?? "Choisir une heure",
+                        style: GoogleFonts.dmSans(),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
 
               // Bouton confirmer
               SizedBox(
-                width: double.infinity, height: 52,
+                width: double.infinity,
+                height: 52,
                 child: ElevatedButton(
                   style: ElevatedButton.styleFrom(
                     backgroundColor: MediQueueTheme.primary,
                     foregroundColor: Colors.white,
                     elevation: 0,
                     shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14)),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
                   ),
-                  onPressed: date == null ? null : () async {
-                    try {
-                      final res = await ApiService.createAppointment(
-                        auth.token!, serviceId,
-                        date!.toIso8601String().split("T")[0],
-                      );
-                      Navigator.pop(ctx, res);
-                    } catch (_) {
-                      Navigator.pop(ctx);
-                    }
-                  },
-                  child: Text('Confirmer le rendez-vous',
-                      style: GoogleFonts.dmSans(
-                          fontSize: 15, fontWeight: FontWeight.w600)),
+                  onPressed: (date == null || selectedTime == null || isBooking)
+                      ? null
+                      : () async {
+                          setModal(() => isBooking = true);
+
+                          try {
+                            final res = await ApiService.createAppointment(
+                              auth.token!,
+                              serviceId,
+                              date!.toIso8601String().split("T")[0],
+                              selectedTime!,
+                            );
+
+                            Navigator.pop(ctx, res);
+                          } catch (_) {
+                            Navigator.pop(ctx);
+                          } finally {
+                            if (mounted) {
+                              setState(() => isBooking = false);
+                            }
+                          }
+                        },
+                  child: isBooking
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : Text(
+                          'Confirmer le rendez-vous',
+                          style: GoogleFonts.dmSans(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
                 ),
               ),
             ],
@@ -176,8 +286,13 @@ class _ServicesScreenState extends State<ServicesScreen> {
 
     if (result != null && mounted) {
       await _load();
-      Navigator.push(context, MaterialPageRoute(
-          builder: (_) => AppointmentDetailScreen(appointment: result)));
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) =>
+              AppointmentDetailScreen(appointment: result['appointment']),
+        ),
+      );
     }
   }
 
@@ -185,14 +300,17 @@ class _ServicesScreenState extends State<ServicesScreen> {
     return OutlinedButton.icon(
       onPressed: onTap,
       icon: Icon(icon, size: 16, color: MediQueueTheme.primary),
-      label: Text(label,
-          style: GoogleFonts.dmSans(
-              color: MediQueueTheme.textPrimary, fontWeight: FontWeight.w500)),
+      label: Text(
+        label,
+        style: GoogleFonts.dmSans(
+          color: MediQueueTheme.textPrimary,
+          fontWeight: FontWeight.w500,
+        ),
+      ),
       style: OutlinedButton.styleFrom(
         padding: const EdgeInsets.symmetric(vertical: 13),
         side: BorderSide(color: MediQueueTheme.divider),
-        shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       ),
     );
   }
@@ -203,7 +321,9 @@ class _ServicesScreenState extends State<ServicesScreen> {
     return Scaffold(
       backgroundColor: MediQueueTheme.background,
       body: loading
-          ? Center(child: CircularProgressIndicator(color: MediQueueTheme.primary))
+          ? Center(
+              child: CircularProgressIndicator(color: MediQueueTheme.primary),
+            )
           : CustomScrollView(
               slivers: [
                 _buildSliverHeader(),
@@ -236,12 +356,17 @@ class _ServicesScreenState extends State<ServicesScreen> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Services médicaux',
-                style: GoogleFonts.dmSerifDisplay(
-                    fontSize: 18, color: Colors.white)),
-            Text('${services.length} disponibles',
-                style: GoogleFonts.dmSans(
-                    fontSize: 11, color: Colors.white70)),
+            Text(
+              'Services médicaux',
+              style: GoogleFonts.dmSerifDisplay(
+                fontSize: 18,
+                color: Colors.white,
+              ),
+            ),
+            Text(
+              '${services.length} disponibles',
+              style: GoogleFonts.dmSans(fontSize: 11, color: Colors.white70),
+            ),
           ],
         ),
         background: Container(
@@ -270,33 +395,49 @@ class _ServicesScreenState extends State<ServicesScreen> {
       child: Row(
         children: [
           Container(
-            width: 46, height: 46,
+            width: 46,
+            height: 46,
             decoration: BoxDecoration(
               color: MediQueueTheme.primarySurface,
               borderRadius: BorderRadius.circular(12),
             ),
-            child: Icon(Icons.local_hospital_rounded,
-                color: MediQueueTheme.primary, size: 22),
+            child: Icon(
+              Icons.local_hospital_rounded,
+              color: MediQueueTheme.primary,
+              size: 22,
+            ),
           ),
           const SizedBox(width: 14),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(s['name'],
-                    style: GoogleFonts.dmSans(
-                        fontWeight: FontWeight.w700,
-                        fontSize: 14,
-                        color: MediQueueTheme.textPrimary)),
+                Text(
+                  s['name'],
+                  style: GoogleFonts.dmSans(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 14,
+                    color: MediQueueTheme.textPrimary,
+                  ),
+                ),
                 const SizedBox(height: 4),
-                Row(children: [
-                  Icon(Icons.people_outline_rounded,
-                      size: 13, color: MediQueueTheme.textHint),
-                  const SizedBox(width: 4),
-                  Text('Capacité : ${s['capacity']}',
+                Row(
+                  children: [
+                    Icon(
+                      Icons.people_outline_rounded,
+                      size: 13,
+                      color: MediQueueTheme.textHint,
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      'Capacité : ${s['capacity']}',
                       style: GoogleFonts.dmSans(
-                          fontSize: 12, color: MediQueueTheme.textSecondary)),
-                ]),
+                        fontSize: 12,
+                        color: MediQueueTheme.textSecondary,
+                      ),
+                    ),
+                  ],
+                ),
               ],
             ),
           ),
@@ -309,11 +450,16 @@ class _ServicesScreenState extends State<ServicesScreen> {
               elevation: 0,
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
               shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10)),
+                borderRadius: BorderRadius.circular(10),
+              ),
             ),
-            child: Text('RDV',
-                style: GoogleFonts.dmSans(
-                    fontSize: 13, fontWeight: FontWeight.w600)),
+            child: Text(
+              'RDV',
+              style: GoogleFonts.dmSans(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
           ),
         ],
       ),
@@ -326,12 +472,19 @@ class _ServicesScreenState extends State<ServicesScreen> {
       padding: const EdgeInsets.only(top: 60),
       child: Column(
         children: [
-          Icon(Icons.medical_services_outlined,
-              size: 52, color: MediQueueTheme.textHint),
+          Icon(
+            Icons.medical_services_outlined,
+            size: 52,
+            color: MediQueueTheme.textHint,
+          ),
           const SizedBox(height: 16),
-          Text('Aucun service disponible',
-              style: GoogleFonts.dmSans(
-                  fontSize: 15, color: MediQueueTheme.textSecondary)),
+          Text(
+            'Aucun service disponible',
+            style: GoogleFonts.dmSans(
+              fontSize: 15,
+              color: MediQueueTheme.textSecondary,
+            ),
+          ),
         ],
       ),
     );
