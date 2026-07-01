@@ -223,4 +223,22 @@ static Future<List> getNotifications(String token) async {
 
     throw Exception("Erreur API");
   }
+
+static Future<Map<String, dynamic>> getProfile(String token) async {
+  final response = await http.get(
+    Uri.parse('$baseUrl/profile/me'),
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer $token',
+    },
+  );
+
+  final data = jsonDecode(response.body);
+
+  if (response.statusCode == 200) {
+    return data;
+  } else {
+    throw Exception(data['message'] ?? 'Erreur profil');
+  }
+}
 }

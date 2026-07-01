@@ -138,7 +138,7 @@ class AppointmentDetailScreen extends StatelessWidget {
       ),
       child: Column(children: [
         _infoTile(Icons.format_list_numbered_rounded,
-            'Position dans la file', '#$position'),
+            'Position dans la file', 'N° $position'),
         _divider(),
         _infoTile(Icons.access_time_rounded,
             'Temps estimé', '$estMin min'),

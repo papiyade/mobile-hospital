@@ -5,6 +5,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../services/api_service.dart';
 import 'services_screen.dart';
 import 'appointments_screen.dart';
+import '../patient/profile_screen.dart';
 import 'notifications_screen.dart';
 import 'splash_screen.dart'; // MediQueueTheme
 
@@ -20,6 +21,7 @@ class _HomeScreenState extends State<HomeScreen> {
   int _index = 0;
   List appointments = [];
   int servicesCount = 0;
+  int unreadNotificationsCount = 0;
   bool loading = true;
   Timer? _timer;
   String? token;
@@ -53,11 +55,18 @@ class _HomeScreenState extends State<HomeScreen> {
 
       final data = await ApiService.getHomeData(t);
 
+      int unread = unreadNotificationsCount;
+      try {
+        final notifs = await ApiService.getNotifications(t);
+        unread = notifs.where((n) => n['read'] == false).length;
+      } catch (_) {}
+
       if (!mounted) return;
 
       setState(() {
         appointments = data['appointments'] ?? [];
         servicesCount = data['services_count'] ?? 0;
+        unreadNotificationsCount = unread;
         loading = false;
       });
     } catch (_) {
@@ -86,6 +95,7 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
       ServicesScreen(),
       AppointmentsScreen(),
+      ProfileScreen(),
     ];
 
     return Scaffold(
@@ -99,128 +109,245 @@ class _HomeScreenState extends State<HomeScreen> {
   // ── AppBar ───────────────────────────────────
   PreferredSizeWidget _buildAppBar() {
     return AppBar(
-      backgroundColor: MediQueueTheme.surface,
+      backgroundColor: MediQueueTheme.background,
+      surfaceTintColor: Colors.transparent,
+      scrolledUnderElevation: 0,
       elevation: 0,
       titleSpacing: 20,
       title: Row(
         children: [
           Container(
-            width: 34,
-            height: 34,
+            width: 38,
+            height: 38,
             decoration: BoxDecoration(
-              color: MediQueueTheme.primarySurface,
-              borderRadius: BorderRadius.circular(8),
+              color: MediQueueTheme.surface,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: MediQueueTheme.divider),
+              boxShadow: [
+                BoxShadow(
+                  color: MediQueueTheme.primary.withOpacity(0.06),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
+              ],
             ),
             child: Padding(
-              padding: const EdgeInsets.all(6),
+              padding: const EdgeInsets.all(7),
               child: Image.asset('assets/images/logo.png', fit: BoxFit.contain),
             ),
           ),
-          const SizedBox(width: 10),
-          Text(
-            'SamaDoktor',
-            style: GoogleFonts.dmSerifDisplay(
-              fontSize: 20,
-              color: MediQueueTheme.textPrimary,
-            ),
+          const SizedBox(width: 12),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'SamaDoktor',
+                style: GoogleFonts.dmSerifDisplay(
+                  fontSize: 19,
+                  color: MediQueueTheme.textPrimary,
+                  height: 1.1,
+                ),
+              ),
+              Text(
+                'Espace patient',
+                style: GoogleFonts.dmSans(
+                  fontSize: 11,
+                  color: MediQueueTheme.textSecondary,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
           ),
         ],
       ),
       actions: [
-        Stack(
-          children: [
-            IconButton(
-              icon: Icon(
-                Icons.notifications_none_rounded,
-                color: MediQueueTheme.textPrimary,
-                size: 24,
-              ),
-              onPressed: token == null
-                  ? null
-                  : () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => NotificationsScreen(token: token!),
-                        ),
-                      );
-                    },
-            ),
-          ],
-        ),
-        IconButton(
-          icon: const Icon(Icons.logout),
-          color: Colors.redAccent,
-          onPressed: _handleLogout,
-        ),
-        const SizedBox(width: 8),
+        _buildNotificationButton(),
+        _buildLogoutButton(),
+        const SizedBox(width: 12),
       ],
+      bottom: PreferredSize(
+        preferredSize: const Size.fromHeight(1),
+        child: Container(
+          height: 1,
+          margin: const EdgeInsets.symmetric(horizontal: 20),
+          color: MediQueueTheme.divider.withOpacity(0.6),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildNotificationButton() {
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        Material(
+          color: MediQueueTheme.surface,
+          borderRadius: BorderRadius.circular(12),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(12),
+            onTap: token == null
+                ? null
+                : () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => NotificationsScreen(token: token!),
+                      ),
+                    ).then((_) => _loadData(silent: true));
+                  },
+            child: Container(
+              width: 42,
+              height: 42,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: MediQueueTheme.divider),
+              ),
+              child: Icon(
+                Icons.notifications_outlined,
+                color: MediQueueTheme.textPrimary,
+                size: 22,
+              ),
+            ),
+          ),
+        ),
+        if (unreadNotificationsCount > 0)
+          Positioned(
+            right: -2,
+            top: -2,
+            child: Container(
+              constraints: const BoxConstraints(minWidth: 18, minHeight: 18),
+              padding: EdgeInsets.symmetric(
+                horizontal: unreadNotificationsCount > 9 ? 5 : 4,
+                vertical: 2,
+              ),
+              decoration: BoxDecoration(
+                color: MediQueueTheme.error,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: MediQueueTheme.surface, width: 2),
+                boxShadow: [
+                  BoxShadow(
+                    color: MediQueueTheme.error.withOpacity(0.35),
+                    blurRadius: 6,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Text(
+                unreadNotificationsCount > 99
+                    ? '99+'
+                    : '$unreadNotificationsCount',
+                textAlign: TextAlign.center,
+                style: GoogleFonts.dmSans(
+                  color: Colors.white,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
+                  height: 1.1,
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildLogoutButton() {
+    return Padding(
+      padding: const EdgeInsets.only(left: 8),
+      child: Material(
+        color: MediQueueTheme.error.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(12),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: _handleLogout,
+          child: Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: MediQueueTheme.error.withOpacity(0.2)),
+            ),
+            child: Icon(
+              Icons.logout_rounded,
+              color: MediQueueTheme.error,
+              size: 20,
+            ),
+          ),
+        ),
+      ),
     );
   }
 
   // ── Bottom Nav ───────────────────────────────
   Widget _buildBottomNav() {
+    const items = [
+      (Icons.home_outlined, Icons.home_rounded, 'Accueil'),
+      (Icons.medical_services_outlined, Icons.medical_services_rounded, 'Services'),
+      (Icons.calendar_month_outlined, Icons.calendar_month_rounded, 'Mes RDV'),
+      (Icons.person_outline, Icons.person, 'Profil'),
+    ];
+
     return Container(
-      margin: const EdgeInsets.fromLTRB(16, 0, 16, 20),
+      margin: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+      padding: const EdgeInsets.all(6),
       decoration: BoxDecoration(
         color: MediQueueTheme.surface,
-        borderRadius: BorderRadius.circular(28),
+        borderRadius: BorderRadius.circular(26),
+        border: Border.all(color: MediQueueTheme.divider.withOpacity(0.85)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.08),
+            color: MediQueueTheme.primary.withOpacity(0.1),
             blurRadius: 24,
             offset: const Offset(0, 8),
           ),
         ],
       ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(28),
-        child: BottomNavigationBar(
-          currentIndex: _index,
-          onTap: (i) => setState(() => _index = i),
-          backgroundColor: const Color(0xFF0C513E).withOpacity(0.92),
-          elevation: 0,
-          selectedItemColor: Colors.white,
-          unselectedItemColor: Colors.white70,
-          selectedLabelStyle: GoogleFonts.dmSans(
-            fontSize: 11,
-            fontWeight: FontWeight.w600,
-          ),
-          unselectedLabelStyle: GoogleFonts.dmSans(fontSize: 11),
-          items: [
-            _navItem(Icons.home_outlined, Icons.home_rounded, 'Accueil'),
-            _navItem(
-              Icons.medical_services_outlined,
-              Icons.medical_services_rounded,
-              'Services',
+      child: Row(
+        children: List.generate(items.length, (i) {
+          final selected = _index == i;
+          final (outline, filled, label) = items[i];
+          return Expanded(
+            child: GestureDetector(
+              onTap: () => setState(() => _index = i),
+              behavior: HitTestBehavior.opaque,
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 220),
+                curve: Curves.easeOutCubic,
+                padding: const EdgeInsets.symmetric(vertical: 10),
+                decoration: BoxDecoration(
+                  color: selected
+                      ? MediQueueTheme.primarySurface
+                      : Colors.transparent,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      selected ? filled : outline,
+                      size: 22,
+                      color: selected
+                          ? MediQueueTheme.primary
+                          : MediQueueTheme.textHint,
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      label,
+                      style: GoogleFonts.dmSans(
+                        fontSize: 10.5,
+                        fontWeight:
+                            selected ? FontWeight.w700 : FontWeight.w500,
+                        color: selected
+                            ? MediQueueTheme.primary
+                            : MediQueueTheme.textSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ),
-            _navItem(
-              Icons.calendar_today_outlined,
-              Icons.calendar_today_rounded,
-              'Mes RDV',
-            ),
-          ],
-        ),
+          );
+        }),
       ),
-    );
-  }
-
-  BottomNavigationBarItem _navItem(
-    IconData outline,
-    IconData filled,
-    String label,
-  ) {
-    return BottomNavigationBarItem(
-      icon: Opacity(opacity: 0.45, child: Icon(outline)),
-      activeIcon: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-        decoration: BoxDecoration(
-          color: MediQueueTheme.primarySurface,
-          borderRadius: BorderRadius.circular(20),
-        ),
-        child: Icon(filled, color: MediQueueTheme.primary),
-      ),
-      label: label,
     );
   }
 }
@@ -254,11 +381,25 @@ class _HomeContent extends StatelessWidget {
   int get _confirmed => appointments.where((a) => a['status'] == 'confirmed').length;
   int get _done => appointments.where((a) => a['status'] == 'done').length;
 
+  String get _greeting {
+    final hour = DateTime.now().hour;
+    if (hour < 12) return 'Bonjour';
+    if (hour < 18) return 'Bon après-midi';
+    return 'Bonsoir';
+  }
+
   @override
   Widget build(BuildContext context) {
     if (loading) {
       return Center(
-        child: CircularProgressIndicator(color: MediQueueTheme.primary),
+        child: SizedBox(
+          width: 32,
+          height: 32,
+          child: CircularProgressIndicator(
+            color: MediQueueTheme.primary,
+            strokeWidth: 2.5,
+          ),
+        ),
       );
     }
 
@@ -266,23 +407,24 @@ class _HomeContent extends StatelessWidget {
     return RefreshIndicator(
       color: MediQueueTheme.primary,
       backgroundColor: MediQueueTheme.surface,
-      displacement: 20,
+      displacement: 24,
+      strokeWidth: 2.5,
       onRefresh: onRefresh,
       child: ListView(
         physics:
             const AlwaysScrollableScrollPhysics(), // obligatoire pour le pull même si peu de contenu
-        padding: const EdgeInsets.fromLTRB(20, 20, 20, 32),
+        padding: const EdgeInsets.fromLTRB(20, 16, 20, 36),
         children: [
           _buildHeroCard(),
-          const SizedBox(height: 20),
+          const SizedBox(height: 22),
           _buildNextRdv(),
-          const SizedBox(height: 20),
+          const SizedBox(height: 28),
           _buildSectionTitle('Accès rapide'),
-          const SizedBox(height: 12),
+          const SizedBox(height: 14),
           _buildMenuGrid(context),
-          const SizedBox(height: 20),
+          const SizedBox(height: 28),
           _buildSectionTitle('Raccourcis'),
-          const SizedBox(height: 12),
+          const SizedBox(height: 14),
           _buildQuickPills(),
         ],
       ),
@@ -292,90 +434,192 @@ class _HomeContent extends StatelessWidget {
   // ── Hero Card ────────────────────────────────
   Widget _buildHeroCard() {
     return Container(
-      padding: const EdgeInsets.all(22),
+      clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
         gradient: const LinearGradient(
-          colors: [Color(0xFF0A6E4A), Color(0xFF18A974)],
+          colors: [
+            MediQueueTheme.primary,
+            Color(0xFF0D5C3D),
+            MediQueueTheme.primaryLight,
+          ],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
+          stops: [0.0, 0.55, 1.0],
         ),
         borderRadius: BorderRadius.circular(MediQueueTheme.radiusLg),
         boxShadow: MediQueueTheme.elevatedShadow,
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Stack(
         children: [
-          Text(
-            'Bonjour 👋',
-            style: GoogleFonts.dmSans(color: Colors.white70, fontSize: 14),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            'Votre suivi médical',
-            style: GoogleFonts.dmSerifDisplay(
-              color: Colors.white,
-              fontSize: 22,
+          Positioned(
+            right: -30,
+            top: -30,
+            child: Container(
+              width: 140,
+              height: 140,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.white.withOpacity(0.07),
+              ),
             ),
           ),
-          const SizedBox(height: 20),
-          Row(
-            children: [
-              _buildStat('${appointments.length}', 'Total RDV'),
-              _buildStatDivider(),
-              _buildStat('$_pending', 'En attente'),
-              _buildStatDivider(),
-              _buildStat('$_confirmed', 'Confirmés'),
-              _buildStatDivider(),
-              _buildStat('$_done', 'Terminés'),
-            ],
+          Positioned(
+            left: -20,
+            bottom: -40,
+            child: Container(
+              width: 100,
+              height: 100,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.white.withOpacity(0.05),
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(24, 26, 24, 24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 5,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.14),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                          color: Colors.white.withOpacity(0.18),
+                        ),
+                      ),
+                      child: Text(
+                        'Tableau de bord',
+                        style: GoogleFonts.dmSans(
+                          color: Colors.white.withOpacity(0.9),
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          letterSpacing: 0.4,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  '$_greeting 👋',
+                  style: GoogleFonts.dmSans(
+                    color: Colors.white.withOpacity(0.75),
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  'Votre suivi médical',
+                  style: GoogleFonts.dmSerifDisplay(
+                    color: Colors.white,
+                    fontSize: 26,
+                    height: 1.15,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  'Consultez vos rendez-vous et services en un coup d\'œil.',
+                  style: GoogleFonts.dmSans(
+                    color: Colors.white.withOpacity(0.65),
+                    fontSize: 12.5,
+                    height: 1.45,
+                  ),
+                ),
+                const SizedBox(height: 22),
+                Row(
+                  children: [
+                    _buildStat('${appointments.length}', 'Total', Icons.event_note_rounded),
+                    const SizedBox(width: 8),
+                    _buildStat('$_pending', 'Attente', Icons.schedule_rounded),
+                    const SizedBox(width: 8),
+                    _buildStat('$_confirmed', 'Confirmés', Icons.check_circle_outline_rounded),
+                    const SizedBox(width: 8),
+                    _buildStat('$_done', 'Terminés', Icons.done_all_rounded),
+                  ],
+                ),
+              ],
+            ),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildStat(String value, String label) => Expanded(
-    child: Column(
-      children: [
-        Text(
-          value,
-          style: GoogleFonts.dmSerifDisplay(color: Colors.white, fontSize: 24),
+  Widget _buildStat(String value, String label, IconData icon) => Expanded(
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 6),
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.12),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: Colors.white.withOpacity(0.14)),
+          ),
+          child: Column(
+            children: [
+              Icon(icon, color: Colors.white.withOpacity(0.7), size: 14),
+              const SizedBox(height: 6),
+              Text(
+                value,
+                style: GoogleFonts.dmSerifDisplay(
+                  color: Colors.white,
+                  fontSize: 20,
+                  height: 1,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                label,
+                style: GoogleFonts.dmSans(
+                  color: Colors.white.withOpacity(0.65),
+                  fontSize: 10,
+                  fontWeight: FontWeight.w500,
+                ),
+                textAlign: TextAlign.center,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
+          ),
         ),
-        const SizedBox(height: 2),
-        Text(
-          label,
-          style: GoogleFonts.dmSans(color: Colors.white60, fontSize: 11),
-        ),
-      ],
-    ),
-  );
-
-  Widget _buildStatDivider() =>
-      Container(width: 1, height: 32, color: Colors.white.withOpacity(0.2));
+      );
 
   // ── Prochain RDV ─────────────────────────────
   Widget _buildNextRdv() {
     if (_nextAppointment == null) {
-      return Container(
-        padding: const EdgeInsets.all(18),
-        decoration: BoxDecoration(
-          color: MediQueueTheme.surface,
-          borderRadius: BorderRadius.circular(MediQueueTheme.radiusMd),
-          border: Border.all(color: MediQueueTheme.divider),
-        ),
+      return _surfaceCard(
         child: Row(
           children: [
-            Icon(
-              Icons.calendar_today_outlined,
-              color: MediQueueTheme.textHint,
-              size: 20,
-            ),
-            const SizedBox(width: 12),
-            Text(
-              'Aucun rendez-vous à venir',
-              style: GoogleFonts.dmSans(
-                color: MediQueueTheme.textSecondary,
-                fontSize: 14,
+            _iconBadge(Icons.event_busy_rounded, MediQueueTheme.textHint),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Prochain rendez-vous',
+                    style: GoogleFonts.dmSans(
+                      fontWeight: FontWeight.w600,
+                      color: MediQueueTheme.textPrimary,
+                      fontSize: 14,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Aucun rendez-vous à venir pour le moment',
+                    style: GoogleFonts.dmSans(
+                      color: MediQueueTheme.textSecondary,
+                      fontSize: 12.5,
+                      height: 1.4,
+                    ),
+                  ),
+                ],
               ),
             ),
           ],
@@ -386,28 +630,10 @@ class _HomeContent extends StatelessWidget {
     final date = DateTime.parse(_nextAppointment!['date']);
     final doctor = _nextAppointment!['doctor']?['user']?['name'] ?? 'Médecin';
 
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: MediQueueTheme.surface,
-        borderRadius: BorderRadius.circular(MediQueueTheme.radiusMd),
-        boxShadow: MediQueueTheme.cardShadow,
-      ),
+    return _surfaceCard(
       child: Row(
         children: [
-          Container(
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(
-              color: MediQueueTheme.primarySurface,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Icon(
-              Icons.calendar_today_rounded,
-              color: MediQueueTheme.primary,
-              size: 20,
-            ),
-          ),
+          _iconBadge(Icons.calendar_today_rounded, MediQueueTheme.primary),
           const SizedBox(width: 14),
           Expanded(
             child: Column(
@@ -421,9 +647,18 @@ class _HomeContent extends StatelessWidget {
                     fontSize: 14,
                   ),
                 ),
-                const SizedBox(height: 3),
+                const SizedBox(height: 5),
                 Text(
-                  'Dr. $doctor · ${date.day}/${date.month}/${date.year}',
+                  'Dr. $doctor',
+                  style: GoogleFonts.dmSans(
+                    color: MediQueueTheme.textPrimary,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}',
                   style: GoogleFonts.dmSans(
                     color: MediQueueTheme.textSecondary,
                     fontSize: 12.5,
@@ -433,22 +668,55 @@ class _HomeContent extends StatelessWidget {
             ),
           ),
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
             decoration: BoxDecoration(
-              color: const Color(0xFFFFF3E0),
-              borderRadius: BorderRadius.circular(8),
+              color: MediQueueTheme.primarySurface,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: MediQueueTheme.divider),
             ),
             child: Text(
               _timeLeft(date),
               style: GoogleFonts.dmSans(
-                color: Colors.orange.shade700,
+                color: MediQueueTheme.primary,
                 fontSize: 12,
-                fontWeight: FontWeight.w600,
+                fontWeight: FontWeight.w700,
               ),
             ),
           ),
         ],
       ),
+    );
+  }
+
+  Widget _surfaceCard({required Widget child}) {
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: MediQueueTheme.surface,
+        borderRadius: BorderRadius.circular(MediQueueTheme.radiusMd),
+        border: Border.all(color: MediQueueTheme.divider.withOpacity(0.85)),
+        boxShadow: [
+          BoxShadow(
+            color: MediQueueTheme.primary.withOpacity(0.05),
+            blurRadius: 16,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: child,
+    );
+  }
+
+  Widget _iconBadge(IconData icon, Color color) {
+    return Container(
+      width: 46,
+      height: 46,
+      decoration: BoxDecoration(
+        color: MediQueueTheme.primarySurface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: MediQueueTheme.divider),
+      ),
+      child: Icon(icon, color: color, size: 21),
     );
   }
 
@@ -460,15 +728,28 @@ class _HomeContent extends StatelessWidget {
     return 'Bientôt';
   }
 
-  Widget _buildSectionTitle(String title) => Text(
-    title,
-    style: GoogleFonts.dmSans(
-      fontSize: 13,
-      fontWeight: FontWeight.w700,
-      color: MediQueueTheme.textPrimary,
-      letterSpacing: 0.3,
-    ),
-  );
+  Widget _buildSectionTitle(String title) => Row(
+        children: [
+          Container(
+            width: 3,
+            height: 16,
+            decoration: BoxDecoration(
+              color: MediQueueTheme.primary,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Text(
+            title,
+            style: GoogleFonts.dmSans(
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
+              color: MediQueueTheme.textPrimary,
+              letterSpacing: 0.1,
+            ),
+          ),
+        ],
+      );
 
   // ── Menu Grid ────────────────────────────────
   Widget _buildMenuGrid(BuildContext context) {
@@ -479,7 +760,7 @@ class _HomeContent extends StatelessWidget {
             title: 'Services',
             subtitle: '$servicesCount disponibles',
             icon: Icons.medical_services_rounded,
-            color: const Color(0xFFE8F5F0),
+            color: MediQueueTheme.primarySurface,
             iconColor: MediQueueTheme.primary,
             onTap: () => Navigator.push(
               context,
@@ -492,13 +773,24 @@ class _HomeContent extends StatelessWidget {
           child: _MenuCard(
             title: 'Mes RDV',
             subtitle: '${appointments.length} rendez-vous',
-            icon: Icons.calendar_today_rounded,
-            color: const Color(0xFFEFF6FF),
-            iconColor: const Color(0xFF3B82F6),
+            icon: Icons.calendar_month_rounded,
+            color: const Color(0xFFEAF4F8),
+            iconColor: const Color(0xFF2B7A8C),
             onTap: () => Navigator.push(
               context,
               MaterialPageRoute(builder: (_) => AppointmentsScreen()),
             ),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: _MenuCard(
+            title: 'Profil',
+            subtitle: 'Informations',
+            icon: Icons.person_rounded,
+            color: const Color(0xFFFDF3E6),
+            iconColor: const Color(0xFFB36B00),
+            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ProfileScreen())),
           ),
         ),
       ],
@@ -508,9 +800,9 @@ class _HomeContent extends StatelessWidget {
   // ── Quick Pills ──────────────────────────────
   Widget _buildQuickPills() {
     final pills = [
-      {'label': 'Urgence', 'icon': Icons.warning_amber_rounded},
-      {'label': 'Pharmacie', 'icon': Icons.local_pharmacy_outlined},
-      {'label': 'Résultats', 'icon': Icons.description_outlined},
+      {'label': 'Urgence', 'icon': Icons.emergency_rounded},
+      {'label': 'Pharmacie', 'icon': Icons.local_pharmacy_rounded},
+      {'label': 'Résultats', 'icon': Icons.assignment_outlined},
     ];
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
@@ -521,27 +813,42 @@ class _HomeContent extends StatelessWidget {
                 margin: const EdgeInsets.only(right: 10),
                 padding: const EdgeInsets.symmetric(
                   horizontal: 16,
-                  vertical: 11,
+                  vertical: 12,
                 ),
                 decoration: BoxDecoration(
                   color: MediQueueTheme.surface,
-                  borderRadius: BorderRadius.circular(30),
+                  borderRadius: BorderRadius.circular(16),
                   border: Border.all(color: MediQueueTheme.divider),
+                  boxShadow: [
+                    BoxShadow(
+                      color: MediQueueTheme.primary.withOpacity(0.04),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
                 ),
                 child: Row(
                   children: [
-                    Icon(
-                      p['icon'] as IconData,
-                      size: 16,
-                      color: MediQueueTheme.primary,
+                    Container(
+                      width: 28,
+                      height: 28,
+                      decoration: BoxDecoration(
+                        color: MediQueueTheme.primarySurface,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Icon(
+                        p['icon'] as IconData,
+                        size: 15,
+                        color: MediQueueTheme.primary,
+                      ),
                     ),
-                    const SizedBox(width: 7),
+                    const SizedBox(width: 10),
                     Text(
                       p['label'] as String,
                       style: GoogleFonts.dmSans(
                         fontSize: 13,
                         color: MediQueueTheme.textPrimary,
-                        fontWeight: FontWeight.w500,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                   ],
@@ -574,46 +881,70 @@ class _MenuCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
+    return Material(
+      color: MediQueueTheme.surface,
       borderRadius: BorderRadius.circular(MediQueueTheme.radiusMd),
-      child: Container(
-        padding: const EdgeInsets.all(18),
-        decoration: BoxDecoration(
-          color: MediQueueTheme.surface,
-          borderRadius: BorderRadius.circular(MediQueueTheme.radiusMd),
-          boxShadow: MediQueueTheme.cardShadow,
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                color: color,
-                borderRadius: BorderRadius.circular(10),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(MediQueueTheme.radiusMd),
+        child: Container(
+          padding: const EdgeInsets.all(18),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(MediQueueTheme.radiusMd),
+            border: Border.all(color: MediQueueTheme.divider.withOpacity(0.85)),
+            boxShadow: [
+              BoxShadow(
+                color: MediQueueTheme.primary.withOpacity(0.05),
+                blurRadius: 14,
+                offset: const Offset(0, 4),
               ),
-              child: Icon(icon, color: iconColor, size: 20),
-            ),
-            const SizedBox(height: 14),
-            Text(
-              title,
-              style: GoogleFonts.dmSans(
-                fontWeight: FontWeight.w700,
-                fontSize: 14,
-                color: MediQueueTheme.textPrimary,
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 42,
+                    height: 42,
+                    decoration: BoxDecoration(
+                      color: color,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: iconColor.withOpacity(0.12),
+                      ),
+                    ),
+                    child: Icon(icon, color: iconColor, size: 21),
+                  ),
+                  const Spacer(),
+                  Icon(
+                    Icons.arrow_forward_ios_rounded,
+                    size: 14,
+                    color: MediQueueTheme.textHint,
+                  ),
+                ],
               ),
-            ),
-            const SizedBox(height: 3),
-            Text(
-              subtitle,
-              style: GoogleFonts.dmSans(
-                fontSize: 12,
-                color: MediQueueTheme.textSecondary,
+              const SizedBox(height: 16),
+              Text(
+                title,
+                style: GoogleFonts.dmSans(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 15,
+                  color: MediQueueTheme.textPrimary,
+                ),
               ),
-            ),
-          ],
+              const SizedBox(height: 4),
+              Text(
+                subtitle,
+                style: GoogleFonts.dmSans(
+                  fontSize: 12,
+                  color: MediQueueTheme.textSecondary,
+                  height: 1.35,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
