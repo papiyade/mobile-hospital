@@ -536,13 +536,13 @@ class _HomeContent extends StatelessWidget {
                 const SizedBox(height: 22),
                 Row(
                   children: [
-                    _buildStat('${appointments.length}', 'Total', Icons.event_note_rounded),
+                    // _buildStat('${appointments.length}', 'Total', Icons.event_note_rounded),
                     const SizedBox(width: 8),
                     _buildStat('$_pending', 'Attente', Icons.schedule_rounded),
                     const SizedBox(width: 8),
                     _buildStat('$_confirmed', 'Confirmés', Icons.check_circle_outline_rounded),
                     const SizedBox(width: 8),
-                    _buildStat('$_done', 'Terminés', Icons.done_all_rounded),
+                    // _buildStat('$_done', 'Terminés', Icons.done_all_rounded),
                   ],
                 ),
               ],

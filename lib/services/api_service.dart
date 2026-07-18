@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 class ApiService {
-  static const String baseUrl = "http://localhost:8000/api";
+  static const String baseUrl = "http://192.168.100.35:8000/api";
 
   // =========================
   // AUTH
@@ -240,5 +240,25 @@ static Future<Map<String, dynamic>> getProfile(String token) async {
   } else {
     throw Exception(data['message'] ?? 'Erreur profil');
   }
+}
+static Future<Map<String, dynamic>> updateProfile(
+  String token,
+  Map<String, dynamic> data,
+) async {
+  final response = await http.put(
+    Uri.parse("$baseUrl/profile/update"),
+    headers: {
+      "Authorization": "Bearer $token",
+      "Accept": "application/json",
+      "Content-Type": "application/json",
+    },
+    body: jsonEncode(data),
+  );
+
+  if (response.statusCode == 200) {
+    return jsonDecode(response.body);
+  }
+
+  throw Exception("Erreur mise à jour");
 }
 }

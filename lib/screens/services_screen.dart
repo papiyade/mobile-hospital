@@ -16,10 +16,30 @@ class _ServicesScreenState extends State<ServicesScreen> {
   bool loading = true;
   bool isBooking = false;
 
+  // ── Recherche & affichage ─────────────────────
+  bool isGridView = false;
+  String searchQuery = '';
+  final TextEditingController _searchCtrl = TextEditingController();
+
+  List<Map<String, dynamic>> get _filteredServices {
+    if (searchQuery.trim().isEmpty) return services;
+    final q = searchQuery.toLowerCase();
+    return services.where((s) {
+      final name = (s['name'] ?? '').toString().toLowerCase();
+      return name.contains(q);
+    }).toList();
+  }
+
   @override
   void initState() {
     super.initState();
     _load();
+  }
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
   }
 
   Future<void> _load() async {
@@ -793,19 +813,148 @@ class _ServicesScreenState extends State<ServicesScreen> {
           : CustomScrollView(
               slivers: [
                 _buildSliverHeader(),
+                SliverToBoxAdapter(child: _buildSearchAndToggle()),
                 SliverPadding(
-                  padding: const EdgeInsets.fromLTRB(20, 18, 20, 36),
-                  sliver: services.isEmpty
+                  padding: const EdgeInsets.fromLTRB(20, 4, 20, 36),
+                  sliver: _filteredServices.isEmpty
                       ? SliverToBoxAdapter(child: _buildEmpty())
-                      : SliverList(
-                          delegate: SliverChildBuilderDelegate(
-                            (_, i) => _buildCard(services[i]),
-                            childCount: services.length,
-                          ),
-                        ),
+                      : isGridView
+                          ? _buildGridSliver()
+                          : _buildListSliver(),
                 ),
               ],
             ),
+    );
+  }
+
+  Widget _buildListSliver() {
+    return SliverList(
+      delegate: SliverChildBuilderDelegate(
+        (_, i) => _buildCard(_filteredServices[i]),
+        childCount: _filteredServices.length,
+      ),
+    );
+  }
+
+  Widget _buildGridSliver() {
+    return SliverGrid(
+      delegate: SliverChildBuilderDelegate(
+        (_, i) => _buildGridCard(_filteredServices[i]),
+        childCount: _filteredServices.length,
+      ),
+      gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+        maxCrossAxisExtent: 200,
+        crossAxisSpacing: 14,
+        mainAxisSpacing: 14,
+        mainAxisExtent: 210, // hauteur fixe en pixels, indépendante de la largeur
+      ),
+    );
+  }
+
+  // ── Recherche + toggle vue ───────────────────
+  Widget _buildSearchAndToggle() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 14),
+      child: Row(
+        children: [
+          Expanded(child: _buildSearchField()),
+          const SizedBox(width: 10),
+          _buildViewToggle(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSearchField() {
+    return Container(
+      height: 46,
+      decoration: BoxDecoration(
+        color: MediQueueTheme.surface,
+        borderRadius: BorderRadius.circular(MediQueueTheme.radiusMd),
+        border: Border.all(color: MediQueueTheme.divider),
+      ),
+      child: TextField(
+        controller: _searchCtrl,
+        onChanged: (v) => setState(() => searchQuery = v),
+        style: GoogleFonts.dmSans(
+          fontSize: 13.5,
+          color: MediQueueTheme.textPrimary,
+        ),
+        decoration: InputDecoration(
+          hintText: 'Rechercher un service...',
+          hintStyle: GoogleFonts.dmSans(
+            fontSize: 13.5,
+            color: MediQueueTheme.textHint,
+          ),
+          prefixIcon: Icon(
+            Icons.search_rounded,
+            size: 20,
+            color: MediQueueTheme.textHint,
+          ),
+          suffixIcon: searchQuery.isEmpty
+              ? null
+              : IconButton(
+                  icon: Icon(
+                    Icons.close_rounded,
+                    size: 18,
+                    color: MediQueueTheme.textHint,
+                  ),
+                  onPressed: () => setState(() {
+                    _searchCtrl.clear();
+                    searchQuery = '';
+                  }),
+                ),
+          border: InputBorder.none,
+          contentPadding: const EdgeInsets.symmetric(vertical: 12),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildViewToggle() {
+    return Container(
+      height: 46,
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: MediQueueTheme.surface,
+        borderRadius: BorderRadius.circular(MediQueueTheme.radiusMd),
+        border: Border.all(color: MediQueueTheme.divider),
+      ),
+      child: Row(
+        children: [
+          _toggleBtn(
+            Icons.view_list_rounded,
+            !isGridView,
+            () => setState(() => isGridView = false),
+          ),
+          _toggleBtn(
+            Icons.grid_view_rounded,
+            isGridView,
+            () => setState(() => isGridView = true),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _toggleBtn(IconData icon, bool selected, VoidCallback onTap) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(9),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        width: 36,
+        height: 38,
+        decoration: BoxDecoration(
+          color: selected ? MediQueueTheme.primary : Colors.transparent,
+          borderRadius: BorderRadius.circular(9),
+        ),
+        child: Icon(
+          icon,
+          size: 18,
+          color: selected ? Colors.white : MediQueueTheme.textHint,
+        ),
+      ),
     );
   }
 
@@ -819,28 +968,32 @@ class _ServicesScreenState extends State<ServicesScreen> {
       surfaceTintColor: Colors.transparent,
       flexibleSpace: FlexibleSpaceBar(
         titlePadding: const EdgeInsets.fromLTRB(20, 0, 20, 18),
-        title: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Services médicaux',
-              style: GoogleFonts.dmSerifDisplay(
-                fontSize: 19,
-                color: Colors.white,
-                height: 1.1,
+        title: FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.centerLeft,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Services médicaux',
+                style: GoogleFonts.dmSerifDisplay(
+                  fontSize: 19,
+                  color: Colors.white,
+                  height: 1.1,
+                ),
               ),
-            ),
-            const SizedBox(height: 3),
-            Text(
-              '${services.length} disponible${services.length > 1 ? 's' : ''}',
-              style: GoogleFonts.dmSans(
-                fontSize: 11.5,
-                color: Colors.white.withOpacity(0.75),
-                fontWeight: FontWeight.w500,
+              const SizedBox(height: 3),
+              Text(
+                '${services.length} disponible${services.length > 1 ? 's' : ''}',
+                style: GoogleFonts.dmSans(
+                  fontSize: 11.5,
+                  color: Colors.white.withOpacity(0.75),
+                  fontWeight: FontWeight.w500,
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
         background: Stack(
           fit: StackFit.expand,
@@ -877,7 +1030,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
     );
   }
 
-  // ── Service Card ─────────────────────────────
+  // ── Service Card (vue liste) ─────────────────
   Widget _buildCard(Map<String, dynamic> s) {
     return Container(
       margin: const EdgeInsets.only(bottom: 14),
@@ -973,6 +1126,79 @@ class _ServicesScreenState extends State<ServicesScreen> {
     );
   }
 
+  // ── Service Card (vue grille) ────────────────
+  Widget _buildGridCard(Map<String, dynamic> s) {
+    return InkWell(
+      onTap: () => _openBooking(int.parse(s['id'].toString())),
+      borderRadius: BorderRadius.circular(MediQueueTheme.radiusMd),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 18),
+        decoration: BoxDecoration(
+          color: MediQueueTheme.surface,
+          borderRadius: BorderRadius.circular(MediQueueTheme.radiusMd),
+          border: Border.all(color: MediQueueTheme.divider.withOpacity(0.85)),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              width: 56,
+              height: 56,
+              decoration: BoxDecoration(
+                color: MediQueueTheme.primarySurface,
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: MediQueueTheme.primary.withOpacity(0.2),
+                ),
+              ),
+              child: const Icon(
+                Icons.local_hospital_rounded,
+                color: MediQueueTheme.primary,
+                size: 26,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              s['name'],
+              textAlign: TextAlign.center,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: GoogleFonts.dmSans(
+                fontWeight: FontWeight.w700,
+                fontSize: 13.5,
+                color: MediQueueTheme.textPrimary,
+                height: 1.2,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: MediQueueTheme.background,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: MediQueueTheme.divider),
+              ),
+              child: Text(
+                'Cap. ${s['capacity']}',
+                style: GoogleFonts.dmSans(
+                  fontSize: 10.5,
+                  color: MediQueueTheme.textSecondary,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Icon(
+              Icons.arrow_forward_rounded,
+              size: 16,
+              color: MediQueueTheme.primary,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildRdvButton({required VoidCallback onTap}) {
     return Material(
       color: Colors.transparent,
@@ -1022,6 +1248,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
 
   // ── Empty state ──────────────────────────────
   Widget _buildEmpty() {
+    final isSearch = searchQuery.trim().isNotEmpty;
     return Padding(
       padding: const EdgeInsets.only(top: 60),
       child: Column(
@@ -1035,14 +1262,16 @@ class _ServicesScreenState extends State<ServicesScreen> {
               border: Border.all(color: MediQueueTheme.divider),
             ),
             child: Icon(
-              Icons.medical_services_outlined,
+              isSearch
+                  ? Icons.search_off_rounded
+                  : Icons.medical_services_outlined,
               size: 34,
               color: MediQueueTheme.textHint,
             ),
           ),
           const SizedBox(height: 18),
           Text(
-            'Aucun service disponible',
+            isSearch ? 'Aucun résultat' : 'Aucun service disponible',
             style: GoogleFonts.dmSans(
               fontSize: 15,
               fontWeight: FontWeight.w600,
@@ -1051,7 +1280,9 @@ class _ServicesScreenState extends State<ServicesScreen> {
           ),
           const SizedBox(height: 6),
           Text(
-            'Revenez plus tard pour consulter les services.',
+            isSearch
+                ? 'Essayez un autre terme de recherche.'
+                : 'Revenez plus tard pour consulter les services.',
             style: GoogleFonts.dmSans(
               fontSize: 13,
               color: MediQueueTheme.textSecondary,
